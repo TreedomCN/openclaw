@@ -18,6 +18,16 @@
   "openclaw": {
     "extensions": [
       "./src/index.ts"
-    ]
+    ],
+    "channel": {
+      "id": "redbooknote",
+      "label": "RedBook Note",
+      "selectionLabel": "RedBook Note (Xiaohongshu)",
+      "detailLabel": "RedBook Automation",
+      "docsPath": "/channels/redbooknote",
+      "docsLabel": "redbooknote",
+      "blurb": "Xiaohongshu automation via Playwright.",
+      "order": 100
+    }
   }
 }

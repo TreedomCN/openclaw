@@ -18,29 +18,27 @@ export class XhsBrowser {
   }
 
   async init() {
-    if (this.browser) return;
-
-    console.log(`[RedBook] Launching browser (headless=${this.headless})...`);
-    this.browser = await chromium.launch({
-      headless: this.headless,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+    // Use persistent context to ensure better session retention
+    if (this.context) return;
 
     const storageStatePath = path.join(this.authDir, "state.json");
-    if (fs.existsSync(storageStatePath)) {
-      console.log("[RedBook] Loading existing session state...");
-      this.context = await this.browser.newContext({ storageState: storageStatePath });
-    } else {
-      console.log("[RedBook] Starting new session...");
-      this.context = await this.browser.newContext();
-    }
+    console.log(`[RedBook] Launching browser (headless=${this.headless})...`);
 
-    // Auto-save state on page close or periodically
-    this.context.on("page", (page) => {
-      page.on("close", () => this.saveState());
+    // Launch persistent context
+    // This stores cookies/localStorage directly on disk, more robust than storageState
+    const userDataDir = path.join(this.authDir, "user_data");
+    this.context = await chromium.launchPersistentContext(userDataDir, {
+      headless: this.headless,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      viewport: { width: 1280, height: 800 },
     });
 
     this.page = await this.context.newPage();
+
+    // Auto-save logic is less critical with persistent context, but still good for export
+    this.context.on("page", (page) => {
+      page.on("close", () => this.saveState());
+    });
   }
 
   async getPage(): Promise<Page> {
@@ -61,11 +59,11 @@ export class XhsBrowser {
 
   async close() {
     await this.saveState();
-    if (this.browser) {
-      await this.browser.close();
-      this.browser = null;
+    if (this.context) {
+      await this.context.close();
       this.context = null;
       this.page = null;
+      this.browser = null; // Browser is managed by context in persistent mode
     }
   }
 }

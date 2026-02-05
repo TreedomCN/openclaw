@@ -8,29 +8,94 @@ export interface NoteContent {
 }
 
 export async function ensureLogin(page: Page, log: (msg: string) => void) {
+  // Check login on creator platform first
+  if (page.url().includes("creator.xiaohongshu.com")) {
+    try {
+      // Creator platform login check
+      // Look for user avatar or specific creator elements
+      const creatorAvatar = page.locator(".header-user-avatar");
+      const creatorLoginBtn = page.locator(".login-btn"); // Or whatever the login button is on creator
+
+      if (await creatorAvatar.isVisible({ timeout: 5000 }).catch(() => false)) {
+        log("Logged in on Creator platform.");
+        return true;
+      }
+
+      // If not logged in on creator, we might need to redirect to login
+      log("Not logged in on Creator platform. Redirecting...");
+      await page.goto("https://creator.xiaohongshu.com/login");
+      // Wait for manual login
+      const qrCanvas = page.locator("canvas");
+      if (await qrCanvas.isVisible({ timeout: 10000 }).catch(() => false)) {
+        log("Please scan QR code to login to Creator platform.");
+        // Wait for navigation after login
+        await page.waitForURL("**/publish/publish", { timeout: 120000 });
+        return true;
+      }
+    } catch (e) {
+      log(`Creator login check failed: ${e}`);
+    }
+  }
+
   log("Checking login status...");
-  await page.goto("https://www.xiaohongshu.com/explore");
+  // Skip navigation if already on explore page to save time on restarts
+  if (!page.url().includes("xiaohongshu.com/explore")) {
+    try {
+      await page.goto("https://www.xiaohongshu.com/explore", {
+        timeout: 30000,
+        waitUntil: "domcontentloaded",
+      });
+    } catch (e) {
+      log(`Navigation failed: ${e}`);
+      // Try to continue anyway, maybe page loaded partially
+    }
+  } else {
+    log("Already on explore page, skipping navigation.");
+  }
 
   // Wait a bit for page load
   try {
     // Check for user avatar or specific logged-in element
-    // Note: Selectors might change. ".user-side-content" or ".user-avatar" are common guesses.
-    // Let's try to wait for a known logged-in indicator or login button.
+    // Selectors:
+    // - .side-bar .user-info (Sidebar user info)
+    // - .user-side-content (Old sidebar)
+    // - #app .avatar (Avatar image)
+    // - .login-btn (Login button)
+
+    const loggedInSelectors = [
+      ".side-bar .user-info",
+      ".user-side-content",
+      ".avatar-wrapper",
+      "a[href*='/user/profile']",
+    ];
+
     const loginButton = page.locator(".login-btn");
-    const avatar = page.locator(".user-side-content"); // Sidebar avatar in explore
 
-    // Quick race to see if we are logged in
-    const isLoggedIn = await Promise.race([
-      avatar.waitFor({ timeout: 5000 }).then(() => true),
-      loginButton.waitFor({ timeout: 5000 }).then(() => false),
-    ]).catch(() => false);
+    // Check if any logged-in selector is visible
+    for (const selector of loggedInSelectors) {
+      if (
+        await page
+          .locator(selector)
+          .first()
+          .isVisible({ timeout: 2000 })
+          .catch(() => false)
+      ) {
+        log(`Detected logged in state via selector: ${selector}`);
+        return true;
+      }
+    }
 
-    if (isLoggedIn) {
-      log("Already logged in.");
+    // Check if login button is visible
+    if (await loginButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+      log("Detected login button. Not logged in.");
+    } else {
+      // If no login button and we are on explore page, we might be logged in but selector changed.
+      // Let's assume logged in if we don't see a login button explicitly
+      log("No login button found. Assuming logged in.");
       return true;
     }
   } catch (e) {
-    // ignore timeout
+    log(`Login check error: ${e}`);
   }
 
   log("Not logged in. Initiating login flow...");
@@ -71,27 +136,76 @@ export async function ensureLogin(page: Page, log: (msg: string) => void) {
 export async function postNote(page: Page, content: NoteContent) {
   await page.goto("https://creator.xiaohongshu.com/publish/publish");
 
+  // Switch to Image/Text tab
+  // Use a more specific selector to avoid the hidden duplicate
+  // The structure shows duplicate "上传图文" tabs, one hidden with negative position.
+  // We want the visible one. The parent .creator-tab doesn't have a unique class for "image/text",
+  // but we can filter by visibility or index.
+  // The order is Video, Image/Text (hidden), Image/Text (visible), Article.
+  // So we want the 3rd tab (index 2) or filter by visibility.
+
+  const tabs = page.locator(".header-tabs .creator-tab");
+  const imageTab = tabs.filter({ hasText: "上传图文" }).locator(":visible").first();
+
+  // Force click might still be needed if overlay exists, but specific locator is better
+  // If element is outside viewport, try scrolling to it first explicitly
+  // Fallback to JS click if Playwright's click fails due to viewport issues
+  try {
+    await imageTab.click({ force: true, timeout: 2000 });
+  } catch (e) {
+    // JS Click fallback
+    await imageTab.evaluate((el: HTMLElement) => el.click());
+  }
+
   // Upload images
-  const fileInput = page.locator('input[type="file"]');
-  await fileInput.setInputFiles(content.images);
+  // The upload button doesn't have an input[type="file"] directly visible sometimes,
+  // or it's handled via a button click that triggers the system dialog (which we can't control easily).
+  // However, Playwright can handle file chooser events if we click the button.
+  // OR, we can try to find the hidden input. Usually there is a hidden input.
+
+  // Let's try to handle the file chooser event first, which is more robust for buttons.
+  const fileChooserPromise = page.waitForEvent("filechooser");
+
+  // Click the "上传图片" button
+  // Use a specific locator based on the provided DOM
+  const uploadBtn = page.locator(".upload-button").filter({ hasText: "上传图片" });
+  await uploadBtn.click();
+
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles(content.images);
 
   // Wait for upload (check for preview)
-  await page.waitForSelector(".preview-item", { timeout: 30000 });
+  // New DOM structure: .img-upload-area .img-preview-area .img-container
+  // We can wait for .img-container or img.preview
+  await page.waitForSelector(".img-preview-area .img-container", { timeout: 30000 });
 
   // Fill title
-  const titleInput = page.locator('input[placeholder*="标题"]');
+  // Based on DOM: .d-input > input.d-text[placeholder="填写标题会有更多赞哦"]
+  const titleInput = page.locator('input.d-text[placeholder*="填写标题"]');
   await titleInput.fill(content.title);
 
   // Fill body
-  const bodyInput = page.locator(".post-content"); // Content editable div or textarea
-  // Note: Editors can be tricky.
-  await bodyInput.fill(content.body);
+  // Based on DOM: #post-textarea (div with contenteditable=true)
+  // The structure shows a div with class "tiptap ProseMirror" which is the editor content.
+  // We should click it first to focus, then type or fill.
+  const editor = page.locator(".tiptap.ProseMirror");
+  await editor.click();
+  await editor.fill(content.body);
 
   // Click publish
-  const publishBtn = page.getByText("发布", { exact: true });
+  // DOM: .publish-page-publish-btn button.bg-red
+  // Or filter by text "发布"
+  const publishBtn = page
+    .locator(".publish-page-publish-btn button.bg-red")
+    .filter({ hasText: "发布" });
   await publishBtn.click();
 
-  await page.waitForURL("**/success", { timeout: 30000 });
+  // Wait for success URL (either the success page or the redirect back to publish with param)
+  // Use a regex to match either /publish/success OR published=true
+  await page.waitForURL(/.*(\/publish\/success|published=true).*/, {
+    timeout: 30000,
+    waitUntil: "domcontentloaded", // Don't wait for full load, URL change is enough
+  });
   return true;
 }
 
