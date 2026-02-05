@@ -1,4 +1,4 @@
-import { redbookPlugin } from "./channel";
+import { redbookPlugin, redbookActions } from "./channel";
 
 export * from "./channel";
 
@@ -11,8 +11,8 @@ const plugin = {
 
     // Register custom tools/actions if supported by the plugin API directly
     // This assumes `api.registerTool` or similar exists for exposing actions globally
-    if (redbookPlugin.actions) {
-      const actions = redbookPlugin.actions.listActions();
+    if (redbookActions) {
+      const actions = redbookActions.listActions();
       for (const action of actions) {
         api.registerTool({
           name: `redbook_${action.name}`,
@@ -20,7 +20,7 @@ const plugin = {
           parameters: action.parameters,
           execute: async (toolCallId: string, args: any) => {
             api.logger.info(`[RedBook] Executing tool ${action.name}`);
-            const result = await redbookPlugin.actions!.handleAction({
+            const result = await redbookActions.handleAction({
               action: action.name,
               parameters: args,
               runtime: api.runtime,

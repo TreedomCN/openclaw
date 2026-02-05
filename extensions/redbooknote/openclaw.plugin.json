@@ -3,12 +3,24 @@
   "channels": ["redbooknote"],
   "configSchema": {
     "type": "object",
+    "additionalProperties": false,
     "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true,
+        "title": "Enabled",
+        "description": "Enable RedBook Note extension"
+      },
       "headless": {
         "type": "boolean",
         "default": true,
-        "description": "Run browser in headless mode"
+        "title": "Headless Mode",
+        "description": "Run browser in headless mode (hidden)"
       }
     }
+  },
+  "uiHints": {
+    "enabled": { "label": "Enabled" },
+    "headless": { "label": "Headless Mode" }
   }
 }
