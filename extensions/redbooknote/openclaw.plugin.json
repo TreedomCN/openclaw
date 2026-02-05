@@ -1,0 +1,14 @@
+{
+  "id": "redbooknote",
+  "channels": ["redbooknote"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "headless": {
+        "type": "boolean",
+        "default": true,
+        "description": "Run browser in headless mode"
+      }
+    }
+  }
+}

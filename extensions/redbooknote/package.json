@@ -1,0 +1,23 @@
+{
+  "name": "@openclaw/redbooknote",
+  "version": "1.0.0",
+  "description": "OpenClaw Xiaohongshu (RedBook) extension via Playwright",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "playwright": "^1.41.0",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "openclaw": "workspace:*"
+  },
+  "openclaw": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  }
+}
