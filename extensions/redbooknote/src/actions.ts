@@ -14,7 +14,6 @@ export async function ensureLogin(page: Page, log: (msg: string) => void) {
       // Creator platform login check
       // Look for user avatar or specific creator elements
       const creatorAvatar = page.locator(".header-user-avatar");
-      const creatorLoginBtn = page.locator(".login-btn"); // Or whatever the login button is on creator
 
       if (await creatorAvatar.isVisible({ timeout: 5000 }).catch(() => false)) {
         log("Logged in on Creator platform.");
@@ -23,13 +22,24 @@ export async function ensureLogin(page: Page, log: (msg: string) => void) {
 
       // If not logged in on creator, we might need to redirect to login
       log("Not logged in on Creator platform. Redirecting...");
-      await page.goto("https://creator.xiaohongshu.com/login");
+      // Use waitUntil: "domcontentloaded" to avoid timeout on tracking scripts
+      await page.goto("https://creator.xiaohongshu.com/login", {
+        timeout: 30000,
+        waitUntil: "domcontentloaded",
+      });
+
       // Wait for manual login
       const qrCanvas = page.locator("canvas");
       if (await qrCanvas.isVisible({ timeout: 10000 }).catch(() => false)) {
         log("Please scan QR code to login to Creator platform.");
+
         // Wait for navigation after login
-        await page.waitForURL("**/publish/publish", { timeout: 120000 });
+        // Increased timeout for manual scan operation
+        // Also handle potential redirects or intermediate states
+        await page.waitForURL("**/publish/publish", {
+          timeout: 120000,
+          waitUntil: "domcontentloaded",
+        });
         return true;
       }
     } catch (e) {
@@ -134,7 +144,11 @@ export async function ensureLogin(page: Page, log: (msg: string) => void) {
 }
 
 export async function postNote(page: Page, content: NoteContent) {
-  await page.goto("https://creator.xiaohongshu.com/publish/publish");
+  // Use domcontentloaded to handle potential network issues or slow tracking scripts
+  await page.goto("https://creator.xiaohongshu.com/publish/publish", {
+    timeout: 60000,
+    waitUntil: "domcontentloaded",
+  });
 
   // Switch to Image/Text tab
   // Use a more specific selector to avoid the hidden duplicate

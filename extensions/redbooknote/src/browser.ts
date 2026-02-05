@@ -29,9 +29,26 @@ export class XhsBrowser {
     const userDataDir = path.join(this.authDir, "user_data");
     this.context = await chromium.launchPersistentContext(userDataDir, {
       headless: this.headless,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-blink-features=AutomationControlled", // Reduce detection
+      ],
       viewport: { width: 1280, height: 800 },
+      // Set user agent to avoid headless detection
+      userAgent:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
     });
+
+    // Inject scripts to hide automation
+    if (this.context) {
+      await this.context.addInitScript(() => {
+        // Overwrite navigator.webdriver
+        Object.defineProperty(navigator, "webdriver", {
+          get: () => undefined,
+        });
+      });
+    }
 
     this.page = await this.context.newPage();
 
