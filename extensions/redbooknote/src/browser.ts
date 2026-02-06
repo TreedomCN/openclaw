@@ -33,6 +33,11 @@ export class XhsBrowser {
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-blink-features=AutomationControlled", // Reduce detection
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-extensions",
+        "--no-first-run",
+        "--no-zygote",
       ],
       viewport: { width: 1280, height: 800 },
       // Set user agent to avoid headless detection

@@ -153,11 +153,19 @@ export const redbookActions = {
     if (action === "post_note") {
       const { title, body, images } = parameters as any;
       await postNote(page, { title, body, images });
+      // Cleanup: Navigate to blank page to save resources
+      try {
+        await page.goto("about:blank");
+      } catch (e) {}
       return { success: true };
     }
     if (action === "like_note") {
       const { noteId } = parameters as any;
       await likeNote(page, noteId);
+      // Cleanup: Navigate to blank page to save resources
+      try {
+        await page.goto("about:blank");
+      } catch (e) {}
       return { success: true };
     }
     throw new Error(`Unknown action: ${action}`);
